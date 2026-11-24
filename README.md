@@ -130,7 +130,7 @@ fnos/
 
 ```bash
 pip install pillow                 # 仅打包需要（生成图标），应用运行期不依赖
-python fnos/build_fpk.py           # 校验结构 → app.tgz → dist/garage-keeper_<version>.fpk
+python fnos/build_fpk.py           # 校验结构 → app.tgz → dist/garage-keeper_<version>_<platform>.fpk
 ```
 
 - 图标是二进制产物，未纳入版本库；首次构建时若缺失会自动调用 `make_icon.py` 重新生成，也能直接 `python fnos/make_icon.py` 单独执行。
