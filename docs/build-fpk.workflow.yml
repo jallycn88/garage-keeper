@@ -1,3 +1,6 @@
+# 用法：在 GitHub 网页把本文件复制为 .github/workflows/build-fpk.yml 并提交，
+# 之后推送 v* 标签（或在 Actions 页手动 Run workflow）即自动打包 fpk。
+# 若用命令行推送带 workflow 的文件，令牌需要额外勾选 workflow 权限。
 name: build-fpk
 
 on:

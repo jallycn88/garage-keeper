@@ -135,7 +135,7 @@ python fnos/build_fpk.py           # 校验结构 → app.tgz → dist/garage-ke
 - 图标是二进制产物，未纳入版本库；首次构建时若缺失会自动调用 `make_icon.py` 重新生成，也能直接 `python fnos/make_icon.py` 单独执行。
 - 打包固定了 tar 与 gzip 的时间戳，**同一份源码重复构建得到的 fpk 校验和完全一致**，便于核对发布包。
 - 修改版本号：编辑 `fnos/garage-keeper/manifest` 中的 `version`，脚本会校验 `X.Y.Z` 形式并同步产物文件名。
-- 打上 `v1.1.0` 这类标签推送后，`.github/workflows/build-fpk.yml` 会自动构建 fpk 并上传到 Actions 与 Release 附件。
+- 打上 `v1.1.0` 这类标签推送后，可用 `docs/build-fpk.workflow.yml` 作为 GitHub Actions 配置：复制到仓库 `.github/workflows/build-fpk.yml` 即可自动构建 fpk，并上传到 Actions 产物与 Release 附件。
 
 ---
 
