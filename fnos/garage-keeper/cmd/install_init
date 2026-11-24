@@ -1,0 +1,37 @@
+#!/bin/bash
+# 安装前检查：确认解释器可用、运行目录可创建
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+APP_ROOT="$(dirname "$CMD_DIR")"
+VAR_DIR="${TRIM_PKGVAR:-$APP_ROOT/var}"
+ETC_DIR="${TRIM_PKGETC:-$APP_ROOT/etc}"
+
+fail() {
+    echo "$1" >&2
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        echo "$1" >> "$TRIM_TEMP_LOGFILE" 2>/dev/null || true
+    fi
+    exit 1
+}
+
+PY=""
+for candidate in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$candidate" ]; then
+        PY="$candidate"
+        break
+    fi
+done
+if [ -z "$PY" ] && command -v python3 >/dev/null 2>&1; then
+    PY="$(command -v python3)"
+fi
+[ -n "$PY" ] || fail "未检测到 python3 运行时（需要 /usr/bin/python3）。车库管家依赖系统自带 Python 3，请确认系统版本。"
+
+"$PY" -c 'import sys, sqlite3; sys.exit(0 if sys.version_info >= (3, 7) else 1)' >/dev/null 2>&1 \
+    || fail "Python 版本过低（需要 3.7 及以上）或缺少 sqlite3 模块。"
+
+mkdir -p "$VAR_DIR" "$ETC_DIR" || fail "无法创建数据目录：$VAR_DIR"
+
+exit 0

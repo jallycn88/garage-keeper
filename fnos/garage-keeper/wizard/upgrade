@@ -1,0 +1,18 @@
+[
+  {
+    "stepTitle": "管理员账号",
+    "items": [
+      {
+        "type": "password",
+        "field": "wizard_admin_pass",
+        "label": "管理员登录密码",
+        "initValue": "",
+        "rules": [
+          { "required": true, "message": "请设置管理员登录密码" },
+          { "pattern": "^.{6,}$", "message": "密码至少 6 位" }
+        ],
+        "tips": "本次升级新增了账号登录功能。该密码仅在系统还没有任何账号时用于创建管理员，已有账号则忽略；账号数据存储在应用数据目录，升级不会丢失。"
+      }
+    ]
+  }
+]

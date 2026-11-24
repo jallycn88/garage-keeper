@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d4ed8">
+  <title>车库管家 · 车辆保养与能耗管理</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <!-- 启动占位：避免登录判断期间出现空壳页面 -->
+  <div class="boot" id="bootScreen">
+    <div class="boot-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 16h14M6.5 16V9.5l2-3.5h7l2 3.5V16"/><path d="M6.5 11.5h11"/>
+        <circle cx="8.5" cy="16.6" r="1.5"/><circle cx="15.5" cy="16.6" r="1.5"/>
+      </svg>
+    </div>
+    <div class="boot-text">正在载入车库管家…</div>
+  </div>
+
+  <!-- 登录 / 初始化 -->
+  <div class="auth" id="authScreen" hidden>
+    <aside class="auth-aside">
+      <div class="auth-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 16h14M6.5 16V9.5l2-3.5h7l2 3.5V16"/><path d="M6.5 11.5h11"/>
+          <circle cx="8.5" cy="16.6" r="1.5"/><circle cx="15.5" cy="16.6" r="1.5"/>
+        </svg>
+      </div>
+      <h1>车库管家</h1>
+      <p class="auth-slogan">加油、充电、保养、维修，一处记账，一车一档。</p>
+      <ul class="auth-points">
+        <li>新能源与燃油分账，电耗/油耗自动折算</li>
+        <li>保养提醒按日期与里程双条件触发</li>
+        <li>自然语言录入，说一句就落成明细</li>
+      </ul>
+      <div class="auth-aside-foot">数据保存在本机飞牛，不经过第三方服务器</div>
+    </aside>
+
+    <main class="auth-main">
+      <div class="auth-mobile-brand">
+        <div class="auth-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 16h14M6.5 16V9.5l2-3.5h7l2 3.5V16"/><path d="M6.5 11.5h11"/>
+            <circle cx="8.5" cy="16.6" r="1.5"/><circle cx="15.5" cy="16.6" r="1.5"/>
+          </svg>
+        </div>
+        <strong>车库管家</strong>
+      </div>
+      <form class="auth-form" id="authForm" novalidate>
+        <h2 id="authTitle">登录</h2>
+        <p class="auth-sub" id="authSub">请输入账号与密码以进入车库管家</p>
+
+        <label class="auth-field">
+          <span>账号</span>
+          <input name="username" id="authUser" autocomplete="username" spellcheck="false" required>
+        </label>
+
+        <label class="auth-field">
+          <span>密码</span>
+          <input name="password" id="authPass" type="password" autocomplete="current-password" required>
+        </label>
+
+        <label class="auth-field" id="authConfirmField" hidden>
+          <span>确认密码</span>
+          <input name="confirm" id="authConfirm" type="password" autocomplete="new-password">
+        </label>
+
+        <label class="auth-field" id="authNameField" hidden>
+          <span>显示名称（可选）</span>
+          <input name="display_name" id="authName" autocomplete="nickname">
+        </label>
+
+        <label class="auth-remember" id="authRemember">
+          <input type="checkbox" name="remember" id="authRememberBox" checked>
+          <span>记住登录状态 14 天</span>
+        </label>
+
+        <button class="btn primary auth-submit" id="authSubmit" type="submit">登录</button>
+        <div class="auth-error" id="authError" hidden></div>
+
+        <div class="auth-foot" id="authFoot">
+          忘记密码：在飞牛终端执行
+          <span class="mono">garage.py --reset-password</span>
+          可重置管理员密码。
+        </div>
+      </form>
+      <div class="auth-version" id="authVersion"></div>
+    </main>
+  </div>
+
+  <div class="app" id="app" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 17h14M6.5 17V9.5l2-4h7l2 4V17"/>
+            <circle cx="8" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/>
+            <path d="M6.5 11.5h11"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <strong>车库管家</strong>
+          <span>Garage Keeper</span>
+        </div>
+      </div>
+      <nav class="nav" id="nav"></nav>
+      <div class="sidebar-foot" id="sidebarFoot"></div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn only-mobile" id="menuBtn" aria-label="打开菜单">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div>
+          <h1 id="pageTitle">总览</h1>
+          <p id="pageSub"></p>
+        </div>
+        <div class="topbar-actions" id="topbarActions"></div>
+      </header>
+      <main class="view" id="view"></main>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div class="toast-root" id="toastRoot"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

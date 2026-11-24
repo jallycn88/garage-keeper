@@ -1,0 +1,14 @@
+{
+    ".url": {
+        "garage-keeper.main": {
+            "title": "车库管家",
+            "icon": "images/icon_{0}.png",
+            "type": "iframe",
+            "protocol": "http",
+            "port": "8787",
+            "url": "/",
+            "allUsers": true,
+            "noDisplay": false
+        }
+    }
+}

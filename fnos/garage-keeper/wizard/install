@@ -1,0 +1,63 @@
+[
+  {
+    "stepTitle": "服务端口",
+    "items": [
+      {
+        "type": "text",
+        "field": "wizard_port",
+        "label": "Web 访问端口",
+        "initValue": "8787",
+        "rules": [
+          {
+            "required": true,
+            "message": "请输入端口号"
+          },
+          {
+            "pattern": "^[0-9]{4,5}$",
+            "message": "端口需为 4-5 位数字"
+          }
+        ],
+        "tips": "默认 8787。若该端口已被其它服务占用，可改为 8080、9099、18787 等空闲端口。安装后也可在应用中心的「设置 - 配置」中修改。"
+      }
+    ]
+  },
+  {
+    "stepTitle": "管理员账号",
+    "items": [
+      {
+        "type": "text",
+        "field": "wizard_admin_user",
+        "label": "管理员账号",
+        "initValue": "admin",
+        "rules": [
+          {
+            "required": true,
+            "message": "请输入管理员账号"
+          },
+          {
+            "pattern": "^[A-Za-z0-9_.-]{2,32}$",
+            "message": "2-32 位字母、数字、下划线、点或短横线"
+          }
+        ],
+        "tips": "用于登录车库管家 Web 界面，安装后可在「设置 - 账号与安全」中新增成员账号。"
+      },
+      {
+        "type": "password",
+        "field": "wizard_admin_pass",
+        "label": "登录密码",
+        "initValue": "",
+        "rules": [
+          {
+            "required": true,
+            "message": "请设置登录密码"
+          },
+          {
+            "pattern": "^.{6,}$",
+            "message": "密码至少 6 位"
+          }
+        ],
+        "tips": "至少 6 位。密码仅用于初始化，不会明文保存在配置文件中；忘记密码可在终端执行 garage.py --reset-password 重置。"
+      }
+    ]
+  }
+]

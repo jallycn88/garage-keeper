@@ -1,0 +1,9 @@
+#!/bin/bash
+# 配置变更前：停止服务，待端口写入后重启
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+"$CMD_DIR/main" stop >/dev/null 2>&1
+exit 0

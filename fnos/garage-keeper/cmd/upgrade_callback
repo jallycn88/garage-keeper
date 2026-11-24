@@ -1,0 +1,51 @@
+#!/bin/bash
+# 升级后：沿用旧配置（端口），重新同步桌面入口并启动
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+APP_ROOT="$(dirname "$CMD_DIR")"
+
+APPDEST="${TRIM_APPDEST:-$APP_ROOT/app}"
+VAR_DIR="${TRIM_PKGVAR:-$APP_ROOT/var}"
+ETC_DIR="${TRIM_PKGETC:-$APP_ROOT/etc}"
+CONF_FILE="$ETC_DIR/garage.conf"
+UI_CONF="$APPDEST/ui/config"
+
+# 升级会整体替换 target，端口需从 etc 重新写回 ui/config
+PORT=""
+if [ -f "$CONF_FILE" ]; then
+    PORT="$(sed -n 's/^port=//p' "$CONF_FILE" 2>/dev/null | head -n 1 | tr -cd '0-9')"
+fi
+[ -n "$PORT" ] || PORT="8787"
+if [ -f "$UI_CONF" ]; then
+    sed -i "s/\"port\": \"[0-9]*\"/\"port\": \"$PORT\"/" "$UI_CONF" 2>/dev/null || true
+fi
+
+if [ "$(id -u)" = "0" ] && [ -n "${TRIM_USERNAME:-}" ]; then
+    chown -R "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$VAR_DIR" "$ETC_DIR" 2>/dev/null || true
+    [ -f "$UI_CONF" ] && chown "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$UI_CONF" 2>/dev/null || true
+fi
+
+# 1.1.0 起引入账号体系：仅在系统还没有任何账号时用向导密码创建管理员
+PY=""
+for candidate in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$candidate" ]; then
+        PY="$candidate"
+        break
+    fi
+done
+[ -n "$PY" ] || PY="$(command -v python3 2>/dev/null || true)"
+if [ -z "$PY" ]; then
+    printf 'warn: 未找到 python3，跳过数据库与账号初始化（服务首次启动时会以默认账号 admin/garage123 初始化）\n' >>"$VAR_DIR/upgrade.log"
+fi
+
+if [ -n "$PY" ] && [ -f "$APPDEST/server/garage.py" ]; then
+    GARAGE_ADMIN_PASS="${wizard_admin_pass:-}" \
+        "$PY" "$APPDEST/server/garage.py" --bootstrap-admin --data "$VAR_DIR" \
+        >>"$VAR_DIR/upgrade.log" 2>&1 || true
+fi
+
+"$CMD_DIR/main" start >/dev/null 2>&1
+exit 0

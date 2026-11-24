@@ -1,0 +1,45 @@
+#!/bin/bash
+# 配置变更后：写入新端口、同步桌面入口、重启服务
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+APP_ROOT="$(dirname "$CMD_DIR")"
+
+APPDEST="${TRIM_APPDEST:-$APP_ROOT/app}"
+VAR_DIR="${TRIM_PKGVAR:-$APP_ROOT/var}"
+ETC_DIR="${TRIM_PKGETC:-$APP_ROOT/etc}"
+CONF_FILE="$ETC_DIR/garage.conf"
+UI_CONF="$APPDEST/ui/config"
+
+PORT="${wizard_port:-}"
+CURRENT=""
+if [ -f "$CONF_FILE" ]; then
+    CURRENT="$(sed -n 's/^port=//p' "$CONF_FILE" 2>/dev/null | head -n 1 | tr -cd '0-9')"
+fi
+
+case "$PORT" in
+    ''|*[!0-9]*) PORT="${CURRENT:-8787}" ;;
+esac
+if [ "$PORT" -lt 1024 ] || [ "$PORT" -gt 65535 ]; then
+    PORT="${CURRENT:-8787}"
+fi
+
+mkdir -p "$ETC_DIR" 2>/dev/null || true
+# 保留既有管理员账号名（账号本身存于数据库，此处仅保留配置项）
+ADMIN_USER="$(sed -n 's/^admin_user=//p' "$CONF_FILE" 2>/dev/null | head -n 1)"
+[ -n "$ADMIN_USER" ] || ADMIN_USER=admin
+printf 'port=%s\nadmin_user=%s\n' "$PORT" "$ADMIN_USER" > "$CONF_FILE"
+if [ -f "$UI_CONF" ]; then
+    sed -i "s/\"port\": \"[0-9]*\"/\"port\": \"$PORT\"/" "$UI_CONF" 2>/dev/null || true
+    if [ "$(id -u)" = "0" ] && [ -n "${TRIM_USERNAME:-}" ]; then
+        chown "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$UI_CONF" 2>/dev/null || true
+    fi
+fi
+if [ "$(id -u)" = "0" ] && [ -n "${TRIM_USERNAME:-}" ]; then
+    chown -R "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$VAR_DIR" "$ETC_DIR" 2>/dev/null || true
+fi
+
+"$CMD_DIR/main" start >/dev/null 2>&1
+exit 0

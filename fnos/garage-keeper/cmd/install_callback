@@ -1,0 +1,68 @@
+#!/bin/bash
+# 安装后初始化：写入端口配置、同步桌面入口、创建数据库
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+APP_ROOT="$(dirname "$CMD_DIR")"
+
+APPDEST="${TRIM_APPDEST:-$APP_ROOT/app}"
+VAR_DIR="${TRIM_PKGVAR:-$APP_ROOT/var}"
+ETC_DIR="${TRIM_PKGETC:-$APP_ROOT/etc}"
+CONF_FILE="$ETC_DIR/garage.conf"
+UI_CONF="$APPDEST/ui/config"
+
+PY=""
+for candidate in /var/apps/python312/target/bin/python3 /usr/bin/python3 /usr/local/bin/python3; do
+    if [ -x "$candidate" ]; then
+        PY="$candidate"
+        break
+    fi
+done
+[ -n "$PY" ] || PY="$(command -v python3 2>/dev/null || true)"
+if [ -z "$PY" ]; then
+    printf 'warn: 未找到 python3，跳过数据库与账号初始化（服务首次启动时会以默认账号 admin/garage123 初始化）\n' >>"$VAR_DIR/install.log"
+fi
+
+mkdir -p "$VAR_DIR" "$ETC_DIR" 2>/dev/null || true
+
+# 端口：向导值 > 环境变量 > 默认 8787
+PORT="${wizard_port:-${TRIM_SERVICE_PORT:-8787}}"
+case "$PORT" in
+    ''|*[!0-9]*) PORT=8787 ;;
+esac
+if [ "$PORT" -lt 1024 ] || [ "$PORT" -gt 65535 ]; then
+    PORT=8787
+fi
+
+# 管理员账号：向导值 > 默认 admin。密码只经环境变量传递，不落盘。
+ADMIN_USER="${wizard_admin_user:-admin}"
+ADMIN_PASS="${wizard_admin_pass:-}"
+case "$ADMIN_USER" in
+    ''|*[!A-Za-z0-9_.-]*) ADMIN_USER=admin ;;
+esac
+if [ "${#ADMIN_USER}" -lt 2 ] || [ "${#ADMIN_USER}" -gt 32 ]; then
+    ADMIN_USER=admin
+fi
+
+printf 'port=%s\nadmin_user=%s\n' "$PORT" "$ADMIN_USER" > "$CONF_FILE"
+
+# 同步桌面入口端口（应用中心通过 ui/config 打开 Web 界面）
+if [ -f "$UI_CONF" ]; then
+    sed -i "s/\"port\": \"[0-9]*\"/\"port\": \"$PORT\"/" "$UI_CONF" 2>/dev/null || true
+fi
+
+# 初始化数据库结构与管理员账号（幂等：已有账号则跳过创建）
+if [ -n "$PY" ] && [ -f "$APPDEST/server/garage.py" ]; then
+    GARAGE_ADMIN_USER="$ADMIN_USER" GARAGE_ADMIN_PASS="$ADMIN_PASS" \
+        "$PY" "$APPDEST/server/garage.py" --bootstrap-admin --data "$VAR_DIR" \
+        >>"$VAR_DIR/install.log" 2>&1 || true
+fi
+
+if [ "$(id -u)" = "0" ] && [ -n "${TRIM_USERNAME:-}" ]; then
+    chown -R "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$VAR_DIR" "$ETC_DIR"   2>/dev/null || true
+    [ -f "$UI_CONF" ] && chown "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$UI_CONF" 2>/dev/null || true
+fi
+
+exit 0

@@ -1,0 +1,10 @@
+#!/bin/bash
+# 升级前：停止正在运行的服务，避免数据库文件被占用
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+"$CMD_DIR/main" stop >/dev/null 2>&1
+sleep 0.5
+exit 0

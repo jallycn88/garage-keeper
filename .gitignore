@@ -1,0 +1,26 @@
+# 构建产物与本地数据
+dist/
+.tmp/
+.workbuddy/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# 运行期数据
+*.db
+*.db-wal
+*.db-shm
+*.log
+*.pid
+
+# 图标为构建时生成（python fnos/make_icon.py），不入库
+fnos/garage-keeper/ICON.PNG
+fnos/garage-keeper/ICON_256.PNG
+fnos/garage-keeper/app/ui/images/*.png
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

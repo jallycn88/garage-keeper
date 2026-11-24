@@ -1,0 +1,169 @@
+#!/bin/bash
+# 车库管家 · 运行控制入口（start / stop / restart / status）
+# 规范：status 退出码 0=运行中，3=未运行，1=异常
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+export LANG="${LANG:-C.UTF-8}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+APP_ROOT="$(dirname "$CMD_DIR")"
+
+APPDEST="${TRIM_APPDEST:-$APP_ROOT/app}"
+VAR_DIR="${TRIM_PKGVAR:-$APP_ROOT/var}"
+ETC_DIR="${TRIM_PKGETC:-$APP_ROOT/etc}"
+
+SERVER="$APPDEST/server/garage.py"
+PID_FILE="$VAR_DIR/garage.pid"
+LOG_FILE="$VAR_DIR/garage.log"
+CONF_FILE="$ETC_DIR/garage.conf"
+
+# 飞牛自带 /usr/bin/python3；如安装官方 python312 运行时则优先使用
+resolve_python() {
+    for candidate in "${GARAGE_PYTHON:-}" \
+                     /var/apps/python312/target/bin/python3 \
+                     /usr/bin/python3 \
+                     /usr/local/bin/python3; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    done
+    if command -v python3 >/dev/null 2>&1; then
+        command -v python3
+        return 0
+    fi
+    return 1
+}
+
+resolve_port() {
+    local port=""
+    if [ -f "$CONF_FILE" ]; then
+        port="$(sed -n 's/^port=//p' "$CONF_FILE" 2>/dev/null | head -n 1 | tr -cd '0-9')"
+    fi
+    [ -n "$port" ] || port="${TRIM_SERVICE_PORT:-}"
+    [ -n "$port" ] || port="8787"
+    printf '%s' "$port"
+}
+
+PY="$(resolve_python)" || PY=""
+PORT="$(resolve_port)"
+
+pid_alive() {
+    [ -n "${1:-}" ] || return 1
+    kill -0 "$1" 2>/dev/null
+}
+
+# 输出正在运行的 PID；文件不存在、进程已退出或 PID 被复用时返回非 0
+current_pid() {
+    local pid
+    [ -f "$PID_FILE" ] || return 1
+    pid="$(tr -cd '0-9' < "$PID_FILE" 2>/dev/null)"
+    [ -n "$pid" ] || return 1
+    pid_alive "$pid" || return 1
+    if [ -r "/proc/$pid/cmdline" ] && ! tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q "garage.py"; then
+        return 1
+    fi
+    printf '%s' "$pid"
+}
+
+health_ok() {
+    [ -n "$PY" ] || return 1
+    "$PY" - "$PORT" <<'PYEOF' >/dev/null 2>&1
+import json
+import sys
+import urllib.request
+
+port = sys.argv[1]
+with urllib.request.urlopen("http://127.0.0.1:%s/healthz" % port, timeout=2) as resp:
+    sys.exit(0 if json.load(resp).get("ok") else 1)
+PYEOF
+}
+
+do_start() {
+    if [ -z "$PY" ]; then
+        echo "未找到 python3 解释器，无法启动" >&2
+        return 1
+    fi
+    if [ ! -f "$SERVER" ]; then
+        echo "程序文件缺失：$SERVER" >&2
+        return 1
+    fi
+    if current_pid >/dev/null; then
+        return 0
+    fi
+
+    mkdir -p "$VAR_DIR" "$ETC_DIR" || return 1
+    : >> "$LOG_FILE" 2>/dev/null || true
+
+    local runas=()
+    if [ "$(id -u)" = "0" ] && [ -n "${TRIM_USERNAME:-}" ] && command -v runuser >/dev/null 2>&1; then
+        chown "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$VAR_DIR" "$ETC_DIR" 2>/dev/null || true
+        chown "$TRIM_USERNAME:${TRIM_GROUPNAME:-$TRIM_USERNAME}" "$LOG_FILE" 2>/dev/null || true
+        runas=(runuser -u "$TRIM_USERNAME" --)
+    fi
+
+    cd "$APPDEST" || return 1
+    nohup ${runas[@]+"${runas[@]}"} "$PY" -u "$SERVER" --port "$PORT" --data "$VAR_DIR" \
+        >>"$LOG_FILE" 2>&1 &
+    local pid=$!
+    echo "$pid" > "$PID_FILE"
+
+    local i
+    for i in $(seq 1 60); do
+        if health_ok; then
+            return 0
+        fi
+        if ! pid_alive "$pid"; then
+            break
+        fi
+        sleep 0.5
+    done
+
+    echo "车库管家启动失败（端口 $PORT），最近日志：" >&2
+    tail -n 20 "$LOG_FILE" 2>/dev/null >&2
+    rm -f "$PID_FILE"
+    return 1
+}
+
+do_stop() {
+    local pid
+    pid="$(current_pid)" || pid=""
+    if [ -n "$pid" ]; then
+        kill -TERM "$pid" 2>/dev/null
+        local i
+        for i in $(seq 1 30); do
+            pid_alive "$pid" || break
+            sleep 0.3
+        done
+        if pid_alive "$pid"; then
+            kill -9 "$pid" 2>/dev/null
+            sleep 0.3
+        fi
+    fi
+    pkill -f "server/garage.py" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    return 0
+}
+
+do_status() {
+    local pid
+    pid="$(current_pid)" || pid=""
+    if [ -n "$pid" ]; then
+        echo "running pid=$pid port=$PORT"
+        return 0
+    fi
+    echo "stopped"
+    return 3
+}
+
+case "${1:-status}" in
+    start)   do_start;  exit $? ;;
+    stop)    do_stop;   exit $? ;;
+    restart) do_stop; do_start; exit $? ;;
+    status)  do_status; exit $? ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}" >&2
+        exit 1
+        ;;
+esac

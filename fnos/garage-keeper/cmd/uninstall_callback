@@ -1,0 +1,32 @@
+#!/bin/bash
+# 卸载后：默认保留车辆档案与记录（数据珍贵，不可逆）
+# 若在卸载向导中明确选择"不保留数据"，则清除数据库与日志
+set -u
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+CMD_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+APP_ROOT="$(dirname "$CMD_DIR")"
+VAR_DIR="${TRIM_PKGVAR:-$APP_ROOT/var}"
+
+KEEP="${wizard_keepdata:-1}"
+case "$KEEP" in
+    0|false|False|off|OFF|no|NO|"") DO_KEEP=0 ;;
+    *) DO_KEEP=1 ;;
+esac
+
+if [ "$DO_KEEP" = "0" ]; then
+    rm -f "$VAR_DIR/garage.db" "$VAR_DIR/garage.db-wal" "$VAR_DIR/garage.db-shm" 2>/dev/null || true
+    rm -f "$VAR_DIR/garage.log" "$VAR_DIR/garage.pid" "$VAR_DIR/install.log" 2>/dev/null || true
+    rmdir "$VAR_DIR" 2>/dev/null || true
+    MSG="车库管家已卸载，本地数据库已按选择删除。"
+else
+    MSG="车库管家已卸载。车辆档案与记录仍保留在：$VAR_DIR/garage.db（如需彻底删除请手动移除该目录）。"
+fi
+
+echo "$MSG"
+if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    echo "$MSG" >> "$TRIM_TEMP_LOGFILE" 2>/dev/null || true
+fi
+
+exit 0

@@ -1,0 +1,13 @@
+appname               = garage-keeper
+version               = 1.1.0
+display_name          = 车库管家
+desc                  = 车辆保养、维修与能耗记录管理，带账号登录。支持多车辆档案与新能源/燃油分型记录，保养维修留档，按日期与里程双条件提醒，自然语言智能录入，以及数据备份、CSV 导出与恢复。
+maintainer            = Garage Keeper
+maintainer_url        = https://github.com/fnnas
+source                = thirdparty
+platform              = all
+service_port          = 8787
+checkport             = true
+ctl_stop              = true
+desktop_uidir         = ui
+desktop_applaunchname = garage-keeper.main
