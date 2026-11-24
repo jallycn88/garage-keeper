@@ -24,6 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PKG = ROOT / "garage-keeper"
+APP_DIR = PKG / "app"
 DIST = ROOT.parent / "dist"
 
 TEXT_SUFFIXES = {"", ".sh", ".sc", ".json", ".txt", ".md", ".html", ".css", ".js", ".py", ".svg"}
@@ -48,6 +49,12 @@ SKIP_DIRS = {"__pycache__", ".git", ".idea", "node_modules"}
 SKIP_SUFFIXES = {".pyc", ".pyo", ".db", ".db-wal", ".db-shm", ".log", ".pid"}
 
 MANIFEST_VERSION = re.compile(r"^version\s*=\s*(\S+)$", re.MULTILINE)
+PLATFORMS = {"x86", "arm", "all"}
+
+
+def manifest_field(text: str, key: str, default: str = "") -> str:
+    match = re.search(rf"^{key}\s*=\s*(.+)$", text, re.MULTILINE)
+    return match.group(1).strip() if match else default
 
 
 def log(msg: str) -> None:
@@ -99,6 +106,20 @@ def validate() -> str:
     if not version or not re.fullmatch(r"\d+\.\d+\.\d+", version.group(1)):
         raise SystemExit(f"manifest version 必须为 X.Y.Z 形式，当前：{version.group(1) if version else '缺失'}")
 
+    appname = manifest_field(manifest, "appname")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", appname or ""):
+        raise SystemExit(f"manifest appname 缺失或格式非法：{appname!r}")
+
+    platform = manifest_field(manifest, "platform", "x86").lower()
+    if platform not in PLATFORMS:
+        raise SystemExit(f"manifest platform 只能取 x86 / arm / all，当前：{platform!r}")
+
+    # platform=all 仅适用于不含原生二进制的纯脚本/静态资源应用
+    if platform == "all":
+        for path in (APP_DIR.rglob("*")):
+            if path.is_file() and path.read_bytes()[:4] == b"\x7fELF":
+                raise SystemExit(f"platform=all 的包内不应出现 ELF 二进制：{path.relative_to(APP_DIR)}")
+
     for rel in EXEC_FILES:
         text = (PKG / rel).read_bytes()
         if not text.startswith(b"#!"):
@@ -115,7 +136,7 @@ def validate() -> str:
         if width != size:
             raise SystemExit(f"{icon} 尺寸应为 {size}px，实际 {width}px")
 
-    return version.group(1)
+    return {"version": version.group(1), "appname": appname, "platform": platform}
 
 
 def normalize_text(data: bytes) -> bytes:
@@ -164,12 +185,13 @@ def build_app_tgz(mtime: int) -> bytes:
     return compressed
 
 
-def build_fpk(version: str) -> Path:
+def build_fpk(meta: dict) -> Path:
     mtime = int(time.mktime(time.strptime("2026-01-01", "%Y-%m-%d")))
     app_tgz = build_app_tgz(mtime)
 
     DIST.mkdir(parents=True, exist_ok=True)
-    target = DIST / f"garage-keeper_{version}.fpk"
+    # 沿用 fnpack 命名：{appname}_{version}_{platform}.fpk
+    target = DIST / f"{meta['appname']}_{meta['version']}_{meta['platform']}.fpk"
 
     entries = 0
     buffer = io.BytesIO()
@@ -233,10 +255,10 @@ def verify(fpk: Path) -> None:
 def main() -> int:
     log("车库管家 · fpk 构建")
     ensure_icons()
-    version = validate()
-    log(f"[1/3] 结构校验通过，版本 {version}")
+    meta = validate()
+    log(f"[1/3] 结构校验通过，版本 {meta['version']}，架构 {meta['platform']}")
     log("[2/3] 打包")
-    fpk = build_fpk(version)
+    fpk = build_fpk(meta)
     verify(fpk)
     log(f"\n完成：{fpk}")
     return 0

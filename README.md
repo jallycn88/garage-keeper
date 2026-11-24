@@ -2,8 +2,9 @@
 
 车辆保养、维修与能耗记录管理，带账号登录，打包为标准飞牛应用包（`.fpk`），可在应用中心直接安装、启动、停止与卸载。
 
-- 安装包：源码构建产出 `dist/garage-keeper_1.1.0.fpk`（构建方式见第七节；推送 `v*` 标签后由 GitHub Actions 自动打包并附到 Release）
+- 安装包：源码构建产出 `dist/garage-keeper_1.1.0_all.fpk`（构建方式见第七节；推送 `v*` 标签后由 GitHub Actions 自动打包并附到 Release）
 - 运行时：系统自带 `/usr/bin/python3`，**零第三方依赖**，无需 pip、无需联网、无需 Docker
+- 架构：**x86_64 与 ARM64 通用**（含 RK3566 等 ARM NAS）——包内只有 Python 脚本与静态资源，没有任何原生二进制，故 `manifest` 标 `platform = all`，同一个 fpk 两种架构都能装
 - 数据：SQLite 单文件，位于飞牛应用数据目录，升级与卸载默认保留
 
 ---
@@ -11,7 +12,7 @@
 ## 一、安装
 
 1. 打开飞牛 **应用中心** → 右上角 **手动安装**（或「+」→ 安装本地应用）。
-2. 选择 `garage-keeper_1.1.0.fpk`，向导分两步：**Web 访问端口**（默认 `8787`）、**管理员账号与密码**（账号默认 `admin`，密码至少 6 位）。
+2. 选择 `garage-keeper_1.1.0_all.fpk`，向导分两步：**Web 访问端口**（默认 `8787`）、**管理员账号与密码**（账号默认 `admin`，密码至少 6 位）。
 3. 安装完成后，桌面出现「车库管家」图标；也可通过 `http://<NAS-IP>:8787/` 直接访问，首次打开为登录页，用上一步设置的账号登录。
 
 若系统提示来源/签名风险，属于第三方应用的常规提示，确认继续即可。
@@ -19,10 +20,10 @@
 **备用安装方式（SSH）**：将 fpk 上传到 NAS 后执行
 
 ```bash
-appcenter-cli install-fpk /vol1/1000/garage-keeper_1.1.0.fpk
+appcenter-cli install-fpk /vol1/1000/garage-keeper_1.1.0_all.fpk
 ```
 
-或使用 `fnos-cli app install-fpk garage-keeper_1.1.0.fpk --volume-id 1 --yes`。
+或使用 `fnos-cli app install-fpk garage-keeper_1.1.0_all.fpk --volume-id 1 --yes`。
 
 ---
 
@@ -133,6 +134,7 @@ python fnos/build_fpk.py           # 校验结构 → app.tgz → dist/garage-ke
 ```
 
 - 图标是二进制产物，未纳入版本库；首次构建时若缺失会自动调用 `make_icon.py` 重新生成，也能直接 `python fnos/make_icon.py` 单独执行。
+- 产物按 `{appname}_{version}_{platform}.fpk` 命名（如 `garage-keeper_1.1.0_all.fpk`），与 `manifest` 中的 `appname` / `version` / `platform` 保持一致；脚本会校验 `platform=all` 的包里不存在 ELF 二进制。
 - 打包固定了 tar 与 gzip 的时间戳，**同一份源码重复构建得到的 fpk 校验和完全一致**，便于核对发布包。
 - 修改版本号：编辑 `fnos/garage-keeper/manifest` 中的 `version`，脚本会校验 `X.Y.Z` 形式并同步产物文件名。
 - 打上 `v1.1.0` 这类标签推送后，可用 `docs/build-fpk.workflow.yml` 作为 GitHub Actions 配置：复制到仓库 `.github/workflows/build-fpk.yml` 即可自动构建 fpk，并上传到 Actions 产物与 Release 附件。
