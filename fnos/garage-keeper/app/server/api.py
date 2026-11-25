@@ -19,7 +19,6 @@ import threading
 import time
 import traceback
 import urllib.parse
-from datetime import date, timedelta
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -1223,16 +1222,6 @@ def _import_payload(conn, data, mode):
 
 
 # ------------------------------------------------------------------ 维护
-@route("POST", "/api/demo-seed")
-def demo_seed(req):
-    require_admin(req)
-    with store.get_conn() as conn:
-        if conn.execute("SELECT COUNT(*) c FROM vehicles").fetchone()["c"] > 0:
-            raise ApiError(409, "已存在车辆档案，示例数据仅在空库时载入")
-        result = _seed(conn)
-    return {"ok": True, **result}
-
-
 @route("DELETE", "/api/data")
 def clear_data(req):
     require_admin(req)
@@ -1242,112 +1231,6 @@ def clear_data(req):
         for table in ("energy_records", "service_records", "reminders", "vehicles"):
             conn.execute(f"DELETE FROM {table}")
     return {"ok": True}
-
-
-def _seed(conn):
-    today = date.today()
-    now = store.now_iso()
-
-    def d(days_ago):
-        return (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
-
-    cur = conn.execute(
-        "INSERT INTO vehicles(name, plate, vtype, brand, model, year, color, vin, init_odometer, tank_capacity,"
-        " battery_capacity, insurer, policy_no, insurance_due, inspect_due, tax_due, register_date, tire_spec,"
-        " note, archived, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)",
-        ("小鹏 G6", "京A·D8821", "ev", "小鹏", "G6 755 Max", 2024, "星阙灰",
-         "L1NNSGHB1R0123456", 12600, None, 66.0, "中国人保", "PICC-2026-882134",
-         (today + timedelta(days=68)).strftime("%Y-%m-%d"),
-         (today + timedelta(days=24)).strftime("%Y-%m-%d"),
-         (today + timedelta(days=140)).strftime("%Y-%m-%d"),
-         "2024-05-18", "235/50 R19", "家充为主，偶尔使用超充", now, now),
-    )
-    ev_id = int(cur.lastrowid)
-
-    cur = conn.execute(
-        "INSERT INTO vehicles(name, plate, vtype, brand, model, year, color, vin, init_odometer, tank_capacity,"
-        " battery_capacity, insurer, policy_no, insurance_due, inspect_due, tax_due, register_date, tire_spec,"
-        " note, archived, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?)",
-        ("大众 途观 L", "京N·5F236", "ice", "上汽大众", "途观 L 330TSI", 2021, "曜石黑",
-         "LSVUC60T8M2123456", 68200, 60.0, None, "平安车险", "PAIC-2026-556677",
-         (today + timedelta(days=12)).strftime("%Y-%m-%d"),
-         (today + timedelta(days=210)).strftime("%Y-%m-%d"),
-         (today + timedelta(days=320)).strftime("%Y-%m-%d"),
-         "2021-03-09", "235/55 R18", "通勤用车", now, now),
-    )
-    ice_id = int(cur.lastrowid)
-
-    ev_rows = [
-        (150, 12880, 41.2, 0.58, 22, 90, "小桔充电·望京 SOHO", 320),
-        (132, 13240, 44.6, 0.62, 18, 92, "特来电·酒仙桥", 330),
-        (118, 13610, 39.8, 0.55, 30, 95, "家充桩", 300),
-        (101, 13980, 46.1, 0.68, 15, 90, "国家电网·朝阳大悦城", 340),
-        (86, 14350, 42.5, 0.60, 20, 88, "小桔充电·三里屯", 310),
-        (70, 14730, 45.3, 0.58, 25, 95, "家充桩", 330),
-        (55, 15110, 40.7, 1.35, 12, 80, "特斯拉超充·蓝色港湾", 250),
-        (41, 15480, 43.9, 0.57, 28, 93, "家充桩", 320),
-        (27, 15860, 44.2, 0.59, 19, 91, "特来电·望京", 330),
-        (13, 16230, 41.8, 0.61, 24, 90, "家充桩", 300),
-        (4, 16590, 45.6, 0.58, 16, 94, "小桔充电·国贸", 340),
-    ]
-    for days, odo, kwh, price, soc_start, soc_end, station, rng in ev_rows:
-        conn.execute(
-            "INSERT INTO energy_records(vehicle_id, kind, date, odometer, quantity, unit_price, cost, station,"
-            " is_full, range_delta, soc_start, soc_end, note, source, created_at) VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?,?)",
-            (ev_id, "charge", d(days), odo, kwh, price,
-             round(kwh * price, 2), station, rng, soc_start, soc_end, None, "seed", now),
-        )
-
-    ice_rows = [
-        (144, 68760, 46.8, 7.86, 368, "中石化·望京加油站"),
-        (126, 69340, 51.2, 7.92, 405, "中石油·京密路"),
-        (110, 69980, 48.5, 8.05, 390, "中石化·酒仙桥"),
-        (95, 70610, 44.2, 7.78, 344, "壳牌·大山子"),
-        (78, 71250, 52.6, 8.11, 427, "中石化·望京加油站"),
-        (62, 71900, 47.3, 7.95, 376, "中石油·京密路"),
-        (47, 72540, 50.1, 8.22, 412, "中石化·酒仙桥"),
-        (31, 73120, 45.9, 7.88, 362, "壳牌·大山子"),
-        (17, 73680, 49.4, 8.02, 396, "中石化·望京加油站"),
-        (5, 74210, 47.7, 8.15, 389, "中石油·京密路"),
-    ]
-    for days, odo, liters, price, cost, station in ice_rows:
-        conn.execute(
-            "INSERT INTO energy_records(vehicle_id, kind, date, odometer, quantity, unit_price, cost, station,"
-            " is_full, range_delta, soc_start, soc_end, note, source, created_at) VALUES(?,?,?,?,?,?,?,?,1,NULL,NULL,NULL,?,?,?)",
-            (ice_id, "fuel", d(days), odo, liters, price, cost, station, "95 号", "seed", now),
-        )
-
-    conn.execute(
-        "INSERT INTO service_records(vehicle_id, rtype, date, odometer, items, cost, shop, note, next_date,"
-        " next_odometer, source, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-        (ev_id, "maintenance", d(120), 13520, "更换空调滤芯 · 四轮换位", 320, "小鹏汽车望京服务中心",
-         "首保后第二次常规检查", (today + timedelta(days=110)).strftime("%Y-%m-%d"), 26000, "seed", now),
-    )
-    conn.execute(
-        "INSERT INTO service_records(vehicle_id, rtype, date, odometer, items, cost, shop, note, next_date,"
-        " next_odometer, source, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-        (ice_id, "maintenance", d(78), 71250, "更换机油机滤（全合成 5W-30）", 680, "上汽大众 4S 店",
-         "同时检查刹车片厚度，余量充足", (today + timedelta(days=100)).strftime("%Y-%m-%d"), 81000, "seed", now),
-    )
-    conn.execute(
-        "INSERT INTO service_records(vehicle_id, rtype, date, odometer, items, cost, shop, note, next_date,"
-        " next_odometer, source, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-        (ice_id, "repair", d(35), 72980, "更换前刹车片 + 刹车盘光盘", 1450, "博世汽车服务·酒仙桥",
-         "高速制动抖动，光盘后消除", None, None, "seed", now),
-    )
-    conn.execute(
-        "INSERT INTO service_records(vehicle_id, rtype, date, odometer, items, cost, shop, note, next_date,"
-        " next_odometer, source, created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-        (ev_id, "expense", d(20), 16230, "洗车 + 内饰清洁", 88, "车享家·望京店",
-         "月度精洗", None, None, "seed", now),
-    )
-    conn.execute(
-        "INSERT INTO reminders(vehicle_id, title, due_date, due_odometer, note, status, created_at)"
-        " VALUES(?,?,?,?,?, 'open', ?)",
-        (ice_id, "轮胎换位", (today + timedelta(days=20)).strftime("%Y-%m-%d"), 78000,
-         "每 10000 km 交叉换位，可延长轮胎寿命", now),
-    )
-    return {"vehicles": 2, "energy": len(ev_rows) + len(ice_rows), "service": 4}
 
 
 # ------------------------------------------------------------------ HTTP 服务

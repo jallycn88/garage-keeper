@@ -652,10 +652,10 @@ function monthlyChart(rows) {
   </svg></div>`;
 }
 
-function lineChart(points, unit) {
-  if (!points || points.length < 2) {
+function lineChart(points, unit, emptyText = '') {
+  if (!points || !points.length) {
     return `<div class="empty" style="padding:28px 10px">${icon('gauge')}
-      <p>至少需要两条「加满 / 充满」且里程递增的记录，才能计算真实能耗。</p></div>`;
+      <p>${esc(emptyText || '至少需要两条「加满 / 充满」且里程递增的记录，才能计算真实能耗。')}</p></div>`;
   }
   const width = 720, height = 190;
   const pad = { t: 16, r: 12, b: 26, l: 46 };
@@ -665,7 +665,9 @@ function lineChart(points, unit) {
   let min = Math.min(...values), max = Math.max(...values);
   if (max === min) { max += 1; min = Math.max(0, min - 1); }
   const span = max - min;
-  const xOf = (i) => pad.l + (innerW * i) / (points.length - 1);
+  const xOf = (i) => (points.length === 1
+    ? pad.l + innerW / 2
+    : pad.l + (innerW * i) / (points.length - 1));
   const yOf = (v) => pad.t + innerH - ((v - min) / span) * innerH;
 
   const coords = points.map((p, i) => [xOf(i), yOf(Number(p.value))]);
@@ -681,14 +683,20 @@ function lineChart(points, unit) {
   const dots = coords.map((c, i) => `<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3" fill="#fff" stroke="#1d4ed8" stroke-width="1.8">
     <title>${esc(points[i].date)} · ${nf(points[i].value, 2)} ${esc(unit)}</title></circle>`).join('');
 
+  const xLabels = points.length === 1
+    ? `<text x="${(pad.l + innerW / 2).toFixed(1)}" y="${height - 8}" text-anchor="middle" font-size="10" fill="#98a2b3">${esc(fmtDate(points[0].date))}</text>`
+    : `<text x="${pad.l}" y="${height - 8}" font-size="10" fill="#98a2b3">${esc(fmtDate(points[0].date))}</text>
+    <text x="${width - pad.r}" y="${height - 8}" text-anchor="end" font-size="10" fill="#98a2b3">${esc(fmtDate(points[points.length - 1].date))}</text>`;
+
   return `<div class="chart-wrap"><svg viewBox="0 0 ${width} ${height}" role="img">
     ${grid}
     <path d="${area}" fill="#1d4ed8" opacity=".06"/>
     <path d="${path}" fill="none" stroke="#1d4ed8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}
-    <text x="${pad.l}" y="${height - 8}" font-size="10" fill="#98a2b3">${esc(fmtDate(points[0].date))}</text>
-    <text x="${width - pad.r}" y="${height - 8}" text-anchor="end" font-size="10" fill="#98a2b3">${esc(fmtDate(points[points.length - 1].date))}</text>
-  </svg></div>`;
+    ${xLabels}
+  </svg></div>${points.length === 1
+    ? `<div class="small muted" style="padding:2px 4px 0">目前只有 1 个完整区间，再记录一次满${unit.includes('kWh') ? '充' : '箱'}即可连成走势。</div>`
+    : ''}`;
 }
 
 /* ================================================================ 通用片段 */
@@ -774,9 +782,7 @@ async function renderOverview() {
       ${emptyState({
         title: '还没有车辆档案', iconName: 'car',
         text: '先建立车辆档案，之后加油、充电、保养的记录与提醒都会自动挂到对应车辆上。',
-        action: `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
-          <button class="btn primary" data-action="add-vehicle">新增车辆</button>
-          <button class="btn" data-action="seed">载入示例数据</button></div>`,
+        action: `<button class="btn primary" data-action="add-vehicle">新增车辆</button>`,
       })}
     </div></div>`;
     return;
@@ -849,8 +855,12 @@ async function renderOverview() {
     <div class="stat-grid">
       <div class="stat"><div class="label">${icon('car')} 在册车辆</div><div class="value">${d.vehicle_count}<small>台</small></div><div class="foot">含燃油 / 纯电 / 插混</div></div>
       <div class="stat"><div class="label">${icon('gauge')} 累计里程</div><div class="value">${nf(d.total_distance)}<small>km</small></div><div class="foot">自建档以来累计</div></div>
-      <div class="stat"><div class="label">${icon('bolt')} 平均油耗</div><div class="value">${d.consumption.fuel === null ? '—' : nf(d.consumption.fuel, 2)}<small>L/100km</small></div><div class="foot">满箱到满箱实测</div></div>
-      <div class="stat"><div class="label">${icon('bolt')} 平均电耗</div><div class="value">${d.consumption.charge === null ? '—' : nf(d.consumption.charge, 2)}<small>kWh/100km</small></div><div class="foot">满充到满充实测</div></div>
+      <div class="stat"><div class="label">${icon('bolt')} 平均油耗</div><div class="value">${d.consumption.fuel === null
+        ? '—' : nf(d.consumption.fuel, 2) + '<small>L/100km</small>'}</div><div class="foot">${d.consumption.fuel === null
+        ? '暂无满箱区间，需连续两次加满' : '满箱到满箱实测'}</div></div>
+      <div class="stat"><div class="label">${icon('bolt')} 平均电耗</div><div class="value">${d.consumption.charge === null
+        ? '—' : nf(d.consumption.charge, 2) + '<small>kWh/100km</small>'}</div><div class="foot">${d.consumption.charge === null
+        ? '暂无满充区间，需连续两次充满' : '满充到满充实测'}</div></div>
     </div>
 
     <div class="grid-2">
@@ -890,9 +900,7 @@ async function renderVehicles() {
       ${emptyState({
         title: '建立第一台车', iconName: 'car',
         text: '动力类型决定可记录的能耗种类：纯电记录充电，燃油记录加油，插混两者皆可。',
-        action: `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button class="btn primary" data-action="add-vehicle">新增车辆</button>
-          <button class="btn" data-action="seed">载入示例数据</button></div>`,
+        action: `<button class="btn primary" data-action="add-vehicle">新增车辆</button>`,
       })}
     </div></div>`;
     return;
@@ -1050,7 +1058,8 @@ async function renderVehicleDetail(id) {
     <div class="grid-2">
       <section class="card">
         <div class="card-head"><h3>${isEv ? '电耗' : '油耗'}走势</h3><span class="sub">${esc(consUnit)}</span></div>
-        <div class="card-body">${lineChart(consPoints, consUnit)}</div>
+        <div class="card-body">${lineChart(consPoints, consUnit,
+          `还没有可计算的区间：先记录一次满${isEv ? '充' : '箱'}作为起点，之后再次满${isEv ? '充' : '箱'}且里程递增，即可算出${isEv ? '电耗' : '油耗'}。`)}</div>
       </section>
       <section class="card">
         <div class="card-head"><h3>月度支出</h3><span class="sub">近 12 个月</span>
@@ -1481,8 +1490,7 @@ async function renderData() {
     <section class="card">
       <div class="card-head"><h3>维护</h3><span class="sub">不可逆操作需二次确认</span></div>
       <div class="card-body toolbar">
-        <button class="btn" data-action="seed">${icon('plus')}载入示例数据</button>
-        <span class="small muted">仅在空库时可用，用于快速体验完整流程</span>
+        <span class="small muted">全部车辆、能耗、保养与提醒记录均为本机录入，可随时导出 JSON 备份。</span>
         <div class="spacer"></div>
         <button class="btn danger" data-action="clear-data">${icon('trash')}清空全部数据</button>
       </div>
@@ -2024,16 +2032,6 @@ async function handleAction(el) {
       State.importMode = el.dataset.mode;
       await renderData();
       return;
-    case 'seed': {
-      try {
-        const res = await api('/api/demo-seed', { method: 'POST' });
-        await refreshCore();
-        toast(`示例数据已载入：${res.vehicles} 台车、${res.energy} 条能耗`);
-        location.hash = '#/overview';
-        navigate();
-      } catch (err) { toast(err.message, 'err'); }
-      return;
-    }
     case 'clear-data': {
       const ok = await confirmDialog({
         title: '清空全部数据',
