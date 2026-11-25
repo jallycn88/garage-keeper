@@ -75,6 +75,18 @@ def ls_tree(sha: str):
     return entries
 
 
+def collect_objects(sha: str) -> set[str]:
+    """列出该提交可达的全部 blob 与 tree SHA，用于判断远端是否已有。"""
+    out = git("ls-tree", "-r", "-t", "-z", "--full-tree", sha, binary=True)
+    found = set()
+    for chunk in out.split(b"\0"):
+        if not chunk:
+            continue
+        meta = chunk.split(b"\t", 1)[0]
+        found.add(meta.split(b" ")[2].decode())
+    return found
+
+
 def commit_object(sha: str):
     """解析原始 commit 对象，保真取回 message 与 author/committer 时间。"""
     raw = git("cat-file", "commit", sha, binary=True)
@@ -221,6 +233,8 @@ class Uploader:
         self.verbose = verbose
         self.blobs_done: set[str] = set()
         self.trees_done: set[str] = set()
+        # 远端已确定存在的对象（分支头可达的对象 + 本次已上传），命中即免请求
+        self.known_remote: set[str] = set()
         self.blob_uploaded = 0
         self.tree_uploaded = 0
 
@@ -229,12 +243,14 @@ class Uploader:
             print(msg, flush=True)
 
     def has_tree(self, sha: str) -> bool:
+        if sha in self.known_remote:
+            return True
         if self.api.dry_run:
             return False
         return self.api.exists("/repos/%s/%s/git/trees/%s" % (self.owner, self.repo, sha))
 
     def ensure_blob(self, sha: str):
-        if sha in self.blobs_done:
+        if sha in self.blobs_done or sha in self.known_remote:
             return
         if not self.api.dry_run and self.api.exists(
             "/repos/%s/%s/git/blobs/%s" % (self.owner, self.repo, sha)
@@ -256,7 +272,7 @@ class Uploader:
         self.blob_uploaded += 1
 
     def ensure_tree(self, sha: str):
-        if sha in self.trees_done:
+        if sha in self.trees_done or sha in self.known_remote:
             return
         items = []
         for mode, otype, oid, name in ls_tree(sha):
@@ -353,6 +369,8 @@ def main(argv=None) -> int:
 
     # 3. 逐个提交上传对象
     up = Uploader(api, owner, repo, verbose=not args.quiet)
+    if remote_sha:
+        up.known_remote = collect_objects(remote_sha)
     for idx, sha in enumerate(todo, 1):
         subject = git("log", "-1", "--format=%s", sha).strip()
         print("[%d/%d] %s %s" % (idx, len(todo), sha[:8], subject), flush=True)
@@ -367,6 +385,7 @@ def main(argv=None) -> int:
 
         if api.exists("/repos/%s/%s/git/commits/%s" % (owner, repo, sha)):
             print("    commit 已存在")
+            up.known_remote |= collect_objects(sha)
             continue
 
         result = api.request(
@@ -388,6 +407,7 @@ def main(argv=None) -> int:
             )
         if got:
             print("    commit %s" % got[:10])
+        up.known_remote |= collect_objects(sha)
 
     if args.dry_run:
         print("\n[dry-run] 未发起任何写请求；预计 %d 次 API 调用。" % api.calls)
