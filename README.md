@@ -124,6 +124,9 @@ fnos/
     └── app/
         ├── server/         # Python 标准库后端（api / store / calc / nlp / backup）
         └── ui/             # 前端（index.html / app.js / styles.css / config / images）
+
+tools/
+└── push_via_api.py         # 走 GitHub REST API 推送（git push 在本机遇代理受限时使用）
 ```
 
 重新打包：
@@ -138,6 +141,15 @@ python fnos/build_fpk.py           # 校验结构 → app.tgz → dist/garage-ke
 - 打包固定了 tar 与 gzip 的时间戳，**同一份源码重复构建得到的 fpk 校验和完全一致**，便于核对发布包。
 - 修改版本号：编辑 `fnos/garage-keeper/manifest` 中的 `version`，脚本会校验 `X.Y.Z` 形式并同步产物文件名。
 - 打上 `v1.1.0` 这类标签推送后，可用 `docs/build-fpk.workflow.yml` 作为 GitHub Actions 配置：复制到仓库 `.github/workflows/build-fpk.yml` 即可自动构建 fpk，并上传到 Actions 产物与 Release 附件。
+
+推送到远端（本机专用 `tools/push_via_api.py`）：
+
+```bash
+python tools/push_via_api.py --dry-run     # 只看有哪些提交待推
+python tools/push_via_api.py               # 推送当前分支到 origin
+```
+
+本机到 `github.com:443` 的 CONNECT 隧道会被代理拦成 502，`git push` 不可用，而 `api.github.com` 正常，因此推送统一走 REST API：脚本读取已存凭据（环境变量 `GITHUB_TOKEN` 或 `git credential`），把本地 blob / tree / commit 逐个上传，再更新分支引用，产出的提交 SHA 与本地完全一致（含提交信息、作者时间）。远端有本地没有的提交时会拒绝执行，确认覆盖再加 `--force`。
 
 ---
 
