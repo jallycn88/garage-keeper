@@ -31,7 +31,21 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def find_repo_root() -> str:
+    """以当前目录所在仓库为准，脚本本身可放在任何位置。"""
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], capture_output=True
+        )
+        if proc.returncode == 0:
+            return proc.stdout.decode("utf-8", "replace").strip()
+    except OSError:
+        pass
+    # 退回到脚本上两级（tools/ 的父目录）
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+REPO_DIR = find_repo_root()
 MAX_BLOB_BYTES = 90 * 1024 * 1024  # GitHub 单 blob 上限 100MB，留点余量
 
 
